@@ -1,0 +1,66 @@
+from datetime import datetime as d
+import fitz
+import re
+import spacy
+
+#   in order to have a good functions you should install the package spacy (pip install spacy) and additionally
+#   a spacy's tool "python -m spacy download en_core_web_lg" in the terminal in your venv.
+#   fitz is a module provided with PyMuPDF package.
+
+english_nlp = spacy.load('en_core_web_lg')
+
+
+# func formats a datum for the pdf2
+def date_format(arg):
+    date_formatter = "%B %d, %Y"
+    return d.strftime(d.strptime(arg, date_formatter), "%Y/%m/%d")
+
+
+# main func
+def parsing_insurance_pdf(path_to_pdf):
+    gathered_info_dict = {
+        "Name of insured: ": "",
+        "Policy number: ": "",
+        "Effective date: ": "",
+        "Expiry date: ": ""
+    }
+
+    doc = fitz.open(path_to_pdf)
+    for page in doc:
+        text = page.get_text("text")
+
+    policy_number = re.search(r"\d{6,12}", text)
+    gathered_info_dict["Policy number: "] = policy_number[0]
+
+    ind = False
+
+    if re.search(r"\d{4}[/]\d{2}[/]\d{2}", text):
+        ind = True
+        period = re.findall(r"\d{4}[/]\d{2}[/]\d{2}", text)
+    else:
+        period = re.findall(r"[A-Za-z0-9]+?\s+\d{2}?\S+\s+\d{4}", text)
+
+    if ind:
+        gathered_info_dict["Effective date: "] = period[0]
+        gathered_info_dict["Expiry date: "] = period[1]
+    else:
+        gathered_info_dict["Expiry date: "] = date_format(period[1])
+        gathered_info_dict["Effective date: "] = date_format(period[0])
+
+    spacy_parser = english_nlp(text)
+    for entity in spacy_parser.ents:
+        if entity.label_ == "PERSON":
+            gathered_info_dict["Name of insured: "] = entity.text
+
+    for k, v in gathered_info_dict.items():
+        print(f"{k} {v}")
+
+    return gathered_info_dict    # func returns a dict with the parsed data
+
+
+if __name__ == "__main__":
+    path_ = input("Please enter the path to the pdf including pdf-title: ")
+    try:
+        parsing_insurance_pdf(path_)
+    except Exception as e:
+        print(e, "\nCheck the path")
